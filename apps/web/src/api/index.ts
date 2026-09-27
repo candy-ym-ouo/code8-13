@@ -2,12 +2,16 @@ import { api } from './client';
 import type {
   Annotation,
   Book,
+  BookCopy,
   BookStatus,
+  CopyMovement,
   DogEar,
   MoodTag,
   Pagination,
   Reflection,
   RereadMark,
+  ShelfCopy,
+  ShelfLocation,
   TimelineEvent,
   Trace,
   User
@@ -83,6 +87,36 @@ export const reflectionApi = {
 export const timelineApi = {
   list: (params: URLSearchParams) =>
     api.get<{ items: TimelineEvent[]; pagination: Pagination }>(`/timeline?${params}`)
+};
+
+export const locationsApi = {
+  list: () => api.get<{ items: ShelfLocation[] }>('/locations'),
+  get: (id: string, params?: URLSearchParams) =>
+    api.get<{ location: ShelfLocation; items: ShelfCopy[]; pagination: Pagination }>(
+      `/locations/${id}${params ? `?${params}` : ''}`
+    ),
+  create: (body: { name: string; note: string | null }) =>
+    api.post<{ location: ShelfLocation }>('/locations', body),
+  update: (id: string, body: { name?: string; note?: string | null; sortOrder?: number; version: number }) =>
+    api.patch<{ location: ShelfLocation }>(`/locations/${id}`, body),
+  delete: (id: string, version: number) => api.delete<void>(`/locations/${id}`, { version }),
+  restore: (id: string) => api.post<{ location: ShelfLocation }>(`/locations/${id}/restore`)
+};
+
+export const copiesApi = {
+  list: (bookId: string) => api.get<{ items: BookCopy[] }>(`/books/${bookId}/copies`),
+  create: (bookId: string, body: { locationId: string | null; label: string | null; note: string | null }) =>
+    api.post<{ copy: BookCopy }>(`/books/${bookId}/copies`, body),
+  update: (id: string, body: { label?: string | null; note?: string | null; version: number }) =>
+    api.patch<{ copy: BookCopy }>(`/copies/${id}`, body),
+  move: (id: string, body: { toLocationId: string | null; reason: string | null; version: number }) =>
+    api.post<{ copy: BookCopy; movementId: string }>(`/copies/${id}/move`, body),
+  archive: (id: string, version: number) => api.post<{ copy: BookCopy }>(`/copies/${id}/archive`, { version }),
+  unarchive: (id: string, version: number) =>
+    api.post<{ copy: BookCopy }>(`/copies/${id}/unarchive`, { version }),
+  delete: (id: string, version: number) => api.delete<void>(`/copies/${id}`, { version }),
+  restore: (id: string) => api.post<{ copy: BookCopy }>(`/copies/${id}/restore`),
+  movements: (id: string) => api.get<{ items: CopyMovement[] }>(`/copies/${id}/movements`)
 };
 
 export const exportApi = {

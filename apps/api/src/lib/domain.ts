@@ -1,4 +1,4 @@
-import { BOOK_STATUSES, MOOD_TAGS, type BookStatus, type MoodTag } from '@paper-book-traces/shared';
+import { BOOK_STATUSES, COPY_STATUSES, MOOD_TAGS, type BookStatus, type CopyStatus, type MoodTag } from '@paper-book-traces/shared';
 import { AppError } from './errors.js';
 
 export const STATUS_TRANSITIONS: Record<BookStatus, BookStatus[]> = {
@@ -7,6 +7,11 @@ export const STATUS_TRANSITIONS: Record<BookStatus, BookStatus[]> = {
   PAUSED: ['READING', 'READ', 'ABANDONED'],
   READ: ['READING'],
   ABANDONED: []
+};
+
+export const COPY_STATUS_TRANSITIONS: Record<CopyStatus, CopyStatus[]> = {
+  ON_SHELF: ['ARCHIVED'],
+  ARCHIVED: ['ON_SHELF']
 };
 
 export function normalizeText(value: string): string {
@@ -61,6 +66,25 @@ export function validateStatusTransition(current: BookStatus, next: BookStatus):
   }
   if (!STATUS_TRANSITIONS[current].includes(next)) {
     throw new AppError(409, 'INVALID_STATUS_TRANSITION', '不允许执行该状态变更');
+  }
+}
+
+export function assertCopyStatus(value: string): asserts value is CopyStatus {
+  if (!COPY_STATUSES.includes(value as CopyStatus)) {
+    throw new AppError(422, 'VALIDATION_ERROR', '副本状态无效', { status: '副本状态无效' });
+  }
+}
+
+export function validateCopyStatusTransition(current: CopyStatus, next: CopyStatus): void {
+  if (current === next) {
+    throw new AppError(
+      409,
+      'COPY_STATUS_UNCHANGED',
+      next === 'ARCHIVED' ? '该副本已处于归档状态' : '该副本已处于在架状态'
+    );
+  }
+  if (!COPY_STATUS_TRANSITIONS[current].includes(next)) {
+    throw new AppError(409, 'INVALID_COPY_STATUS_TRANSITION', '不允许执行该副本状态变更');
   }
 }
 

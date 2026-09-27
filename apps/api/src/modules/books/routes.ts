@@ -119,7 +119,7 @@ function serializeBook(book: {
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date | null;
-}) {
+}, copyCount?: number) {
   return {
     id: book.id,
     title: book.title,
@@ -132,7 +132,8 @@ function serializeBook(book: {
     status: book.status,
     version: book.version,
     createdAt: book.createdAt,
-    updatedAt: book.updatedAt
+    updatedAt: book.updatedAt,
+    ...(copyCount !== undefined ? { copyCount } : {})
   };
 }
 
@@ -190,7 +191,8 @@ export const bookRoutes: FastifyPluginAsync = async (app) => {
               dogEars: { where: { deletedAt: null } },
               annotations: { where: { deletedAt: null } },
               rereadMarks: { where: { deletedAt: null } },
-              reflections: { where: { deletedAt: null } }
+              reflections: { where: { deletedAt: null } },
+              copies: { where: { deletedAt: null } }
             }
           }
         }
@@ -214,7 +216,7 @@ export const bookRoutes: FastifyPluginAsync = async (app) => {
 
     return {
       items: books.map((book) => ({
-        ...serializeBook(book),
+        ...serializeBook(book, book._count.copies),
         traceSummary: {
           dogEars: book._count.dogEars,
           annotations: book._count.annotations,
@@ -272,7 +274,8 @@ export const bookRoutes: FastifyPluginAsync = async (app) => {
             dogEars: { where: { deletedAt: null } },
             annotations: { where: { deletedAt: null } },
             rereadMarks: { where: { deletedAt: null } },
-            reflections: { where: { deletedAt: null } }
+            reflections: { where: { deletedAt: null } },
+            copies: { where: { deletedAt: null } }
           }
         },
         reflections: {
@@ -285,7 +288,7 @@ export const bookRoutes: FastifyPluginAsync = async (app) => {
 
     return {
       book: {
-        ...serializeBook(book),
+        ...serializeBook(book, book._count.copies),
         traceSummary: {
           dogEars: book._count.dogEars,
           annotations: book._count.annotations,
@@ -459,17 +462,19 @@ export const bookRoutes: FastifyPluginAsync = async (app) => {
         throw new AppError(409, 'STALE_WRITE', '书目已在其他位置被修改，请刷新后重试');
       }
       const now = new Date();
-      const [dogEars, annotations, rereadMarks, reflections] = await Promise.all([
+      const [dogEars, annotations, rereadMarks, reflections, copies] = await Promise.all([
         tx.dogEar.findMany({ where: { bookId, deletedAt: null }, select: { id: true } }),
         tx.annotation.findMany({ where: { bookId, deletedAt: null }, select: { id: true } }),
         tx.rereadMark.findMany({ where: { bookId, deletedAt: null }, select: { id: true } }),
-        tx.completionReflection.findMany({ where: { bookId, deletedAt: null }, select: { id: true } })
+        tx.completionReflection.findMany({ where: { bookId, deletedAt: null }, select: { id: true } }),
+        tx.bookCopy.findMany({ where: { bookId, deletedAt: null }, select: { id: true } })
       ]);
       await Promise.all([
         tx.dogEar.updateMany({ where: { bookId, deletedAt: null }, data: { deletedAt: now, version: { increment: 1 } } }),
         tx.annotation.updateMany({ where: { bookId, deletedAt: null }, data: { deletedAt: now, version: { increment: 1 } } }),
         tx.rereadMark.updateMany({ where: { bookId, deletedAt: null }, data: { deletedAt: now, version: { increment: 1 } } }),
-        tx.completionReflection.updateMany({ where: { bookId, deletedAt: null }, data: { deletedAt: now, version: { increment: 1 } } })
+        tx.completionReflection.updateMany({ where: { bookId, deletedAt: null }, data: { deletedAt: now, version: { increment: 1 } } }),
+        tx.bookCopy.updateMany({ where: { bookId, deletedAt: null }, data: { deletedAt: now, version: { increment: 1 } } })
       ]);
       await tx.book.update({
         where: { id: bookId },
@@ -487,7 +492,8 @@ export const bookRoutes: FastifyPluginAsync = async (app) => {
         ...dogEars.map((item) => ({ entityType: 'DOG_EAR' as const, id: item.id })),
         ...annotations.map((item) => ({ entityType: 'ANNOTATION' as const, id: item.id })),
         ...rereadMarks.map((item) => ({ entityType: 'REREAD_MARK' as const, id: item.id })),
-        ...reflections.map((item) => ({ entityType: 'COMPLETION_REFLECTION' as const, id: item.id }))
+        ...reflections.map((item) => ({ entityType: 'COMPLETION_REFLECTION' as const, id: item.id })),
+        ...copies.map((item) => ({ entityType: 'BOOK_COPY' as const, id: item.id }))
       ];
       for (const child of childEvents) {
         await writeEvent(tx, {

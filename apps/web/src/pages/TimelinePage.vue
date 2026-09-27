@@ -78,6 +78,17 @@ function summary(event: TimelineEvent): string {
   if (typeof payload.previousStatus === 'string' && typeof payload.nextStatus === 'string') {
     return `${payload.previousStatus} → ${payload.nextStatus}`;
   }
+  if (typeof payload.copyNo === 'number') {
+    const base = `第 ${payload.copyNo} 册`;
+    if ('fromLocationName' in payload || 'toLocationName' in payload) {
+      const from = typeof payload.fromLocationName === 'string' ? payload.fromLocationName : '未上架';
+      const to = typeof payload.toLocationName === 'string' ? payload.toLocationName : '未上架';
+      return `${base}：${from} → ${to}`;
+    }
+    if (typeof payload.locationName === 'string') return `${base}：${payload.locationName}`;
+    return base;
+  }
+  if (typeof payload.locationName === 'string') return payload.locationName;
   if (typeof payload.summary === 'string') return payload.summary;
   return '';
 }
@@ -140,7 +151,7 @@ onMounted(async () => {
           </div>
           <p>
             <RouterLink v-if="event.bookId" :to="`/books/${event.bookId}`">{{ event.bookTitle }}</RouterLink>
-            <span v-else>{{ event.bookTitle }}</span>
+            <span v-else-if="event.bookTitle">{{ event.bookTitle }}</span>
             <span v-if="summary(event)"> · {{ summary(event) }}</span>
           </p>
         </div>

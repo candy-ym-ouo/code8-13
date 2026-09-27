@@ -590,6 +590,16 @@ small,
   color: #87431f;
 }
 
+.status-badge[data-status="ON_SHELF"] {
+  background: #e2eee5;
+  color: #315b3e;
+}
+
+.status-badge[data-status="ARCHIVED"] {
+  background: #e4e0ea;
+  color: #4d4657;
+}
+
 .trace-summary {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

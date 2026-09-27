@@ -112,6 +112,7 @@ onMounted(load);
           <div><dt>批注</dt><dd>{{ book.traceSummary.annotations }}</dd></div>
           <div><dt>重读页</dt><dd>{{ book.traceSummary.rereadMarks }}</dd></div>
         </dl>
+        <p v-if="book.copyCount" class="muted">在架实体副本 {{ book.copyCount }} 册</p>
         <p v-if="book.hasCompletionReflection" class="completion-hint">
           已留下读完后的感受
         </p>

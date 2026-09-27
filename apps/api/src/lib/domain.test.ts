@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { isRestoreWindowOpen, isStrictlyEditable, normalizeMoodTags, validatePageRange, validateStatusTransition } from './domain.js';
+import {
+  isRestoreWindowOpen,
+  isStrictlyEditable,
+  normalizeMoodTags,
+  validateCopyStatusTransition,
+  validatePageRange,
+  validateStatusTransition
+} from './domain.js';
 import { AppError } from './errors.js';
 
 describe('domain rules', () => {
@@ -30,5 +37,18 @@ describe('domain rules', () => {
     expect(isRestoreWindowOpen(new Date('2026-09-22T00:00:00.000Z'), now)).toBe(false);
     expect(isStrictlyEditable(new Date('2026-09-25T00:00:00.000Z'), now)).toBe(true);
     expect(isStrictlyEditable(new Date('2026-09-23T00:00:00.000Z'), now)).toBe(false);
+  });
+
+  it('allows archiving and unarchiving copies', () => {
+    expect(() => validateCopyStatusTransition('ON_SHELF', 'ARCHIVED')).not.toThrow();
+    expect(() => validateCopyStatusTransition('ARCHIVED', 'ON_SHELF')).not.toThrow();
+  });
+
+  it('rejects repeated or unknown copy status changes', () => {
+    expect(() => validateCopyStatusTransition('ON_SHELF', 'ON_SHELF')).toThrow(AppError);
+    expect(() => validateCopyStatusTransition('ARCHIVED', 'ARCHIVED')).toThrow(AppError);
+    expect(() =>
+      validateCopyStatusTransition('ON_SHELF', 'LOST' as never)
+    ).toThrow(AppError);
   });
 });

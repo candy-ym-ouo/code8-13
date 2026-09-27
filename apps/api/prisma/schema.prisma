@@ -32,12 +32,19 @@ enum MoodTag {
   CHANGED
 }
 
+enum CopyStatus {
+  ON_SHELF
+  ARCHIVED
+}
+
 enum ActivityEntityType {
   BOOK
   DOG_EAR
   ANNOTATION
   REREAD_MARK
   COMPLETION_REFLECTION
+  SHELF_LOCATION
+  BOOK_COPY
 }
 
 enum ActivityAction {
@@ -47,6 +54,9 @@ enum ActivityAction {
   RESTORED
   STATUS_CHANGED
   COMPLETED
+  MOVED
+  ARCHIVED
+  UNARCHIVED
 }
 
 model User {
@@ -64,6 +74,9 @@ model User {
   annotations       Annotation[]
   rereadMarks       RereadMark[]
   reflections       CompletionReflection[]
+  shelfLocations    ShelfLocation[]
+  bookCopies        BookCopy[]
+  copyMovements     CopyMovement[]
   activityEvents    ActivityEvent[]
 
   @@map("users")
@@ -103,6 +116,7 @@ model Book {
   annotations   Annotation[]
   rereadMarks   RereadMark[]
   reflections   CompletionReflection[]
+  copies        BookCopy[]
   activityEvents ActivityEvent[]
 
   @@index([userId, deletedAt, updatedAt])
@@ -189,6 +203,71 @@ model CompletionReflection {
   @@index([userId, deletedAt, completedAt])
   @@index([bookId, completionRound, deletedAt])
   @@map("completion_reflections")
+}
+
+model ShelfLocation {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  version   Int       @default(1)
+  name      String    @db.VarChar(100)
+  note      String?   @db.VarChar(500)
+  sortOrder Int       @default(0) @map("sort_order")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  copies        BookCopy[]
+  movementsFrom CopyMovement[] @relation("MovementFrom")
+  movementsTo   CopyMovement[] @relation("MovementTo")
+
+  @@index([userId, deletedAt, sortOrder])
+  @@map("shelf_locations")
+}
+
+model BookCopy {
+  id         String     @id @default(uuid()) @db.Uuid
+  userId     String     @map("user_id") @db.Uuid
+  bookId     String     @map("book_id") @db.Uuid
+  locationId String?    @map("location_id") @db.Uuid
+  version    Int        @default(1)
+  copyNo     Int        @map("copy_no")
+  label      String?    @db.VarChar(100)
+  note       String?    @db.VarChar(500)
+  status     CopyStatus @default(ON_SHELF)
+  archivedAt DateTime?  @map("archived_at") @db.Timestamptz(3)
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt  DateTime?  @map("deleted_at") @db.Timestamptz(3)
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  book      Book           @relation(fields: [bookId], references: [id], onDelete: Restrict)
+  location  ShelfLocation? @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  movements CopyMovement[]
+
+  @@index([userId, deletedAt, createdAt])
+  @@index([bookId, deletedAt, copyNo])
+  @@index([locationId, deletedAt])
+  @@map("book_copies")
+}
+
+model CopyMovement {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  copyId         String   @map("copy_id") @db.Uuid
+  fromLocationId String?  @map("from_location_id") @db.Uuid
+  toLocationId   String?  @map("to_location_id") @db.Uuid
+  reason         String?  @db.VarChar(500)
+  movedAt        DateTime @default(now()) @map("moved_at") @db.Timestamptz(3)
+
+  user         User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  copy         BookCopy       @relation(fields: [copyId], references: [id], onDelete: Restrict)
+  fromLocation ShelfLocation? @relation("MovementFrom", fields: [fromLocationId], references: [id], onDelete: Restrict)
+  toLocation   ShelfLocation? @relation("MovementTo", fields: [toLocationId], references: [id], onDelete: Restrict)
+
+  @@index([userId, movedAt])
+  @@index([copyId, movedAt])
+  @@map("copy_movements")
 }
 
 model ActivityEvent {

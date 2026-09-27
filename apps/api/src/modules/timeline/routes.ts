@@ -57,7 +57,7 @@ export const timelineRoutes: FastifyPluginAsync = async (app) => {
       items: events.map((event) => ({
         id: event.id,
         bookId: event.bookId,
-        bookTitle: event.book?.title ?? '已删除书目',
+        bookTitle: event.book?.title ?? (event.bookId ? '已删除书目' : null),
         entityType: event.entityType,
         entityId: event.entityId,
         action: event.action,

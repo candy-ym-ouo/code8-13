@@ -2,26 +2,30 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ApiError } from '../api/client';
-import { booksApi, reflectionApi, traceApi } from '../api';
+import { booksApi, copiesApi, locationsApi, reflectionApi, traceApi } from '../api';
 import { formatDate, formatDateTime } from '../api/format';
 import ErrorNotice from '../components/ErrorNotice.vue';
 import MoodPicker from '../components/MoodPicker.vue';
 import {
   ACTION_LABELS,
+  COPY_STATUS_LABELS,
   ENTITY_LABELS,
   MOOD_LABELS,
   STATUS_LABELS,
   TRACE_LABELS,
   type Book,
+  type BookCopy,
   type BookStatus,
+  type CopyMovement,
   type MoodTag,
   type Reflection,
+  type ShelfLocation,
   type Trace,
   type TraceType
 } from '../types/domain';
 import { timelineApi } from '../api';
 
-type DeletedItem = { kind: 'DOG_EAR' | 'ANNOTATION' | 'REREAD_MARK' | 'REFLECTION'; id: string; label: string };
+type DeletedItem = { kind: 'DOG_EAR' | 'ANNOTATION' | 'REREAD_MARK' | 'REFLECTION' | 'COPY'; id: string; label: string };
 type ReflectionEdit = { id: string; version: number; moodTags: MoodTag[]; text: string };
 
 const route = useRoute();
@@ -53,6 +57,16 @@ const completeForm = reactive({
   moodTags: [] as MoodTag[],
   text: ''
 });
+const copies = ref<BookCopy[]>([]);
+const locations = ref<ShelfLocation[]>([]);
+const movementsByCopy = ref<Record<string, CopyMovement[]>>({});
+const expandedMovements = ref<string | null>(null);
+const showCopyForm = ref(false);
+const copyEdit = ref<BookCopy | null>(null);
+const moveTarget = ref<BookCopy | null>(null);
+const copyForm = reactive({ locationId: '', label: '', note: '' });
+const copyEditForm = reactive({ label: '', note: '' });
+const moveForm = reactive({ toLocationId: '', reason: '' });
 
 const tabs = computed(() => [
   { value: 'PAGES' as const, label: '按页' },
@@ -120,16 +134,20 @@ async function load(): Promise<void> {
   loading.value = true;
   error.value = '';
   try {
-    const [bookResult, loadedTraces, reflectionResult, timelineResult] = await Promise.all([
+    const [bookResult, loadedTraces, reflectionResult, timelineResult, copiesResult, locationsResult] = await Promise.all([
       booksApi.get(bookId.value),
       loadAllTraces(bookId.value),
       booksApi.reflections(bookId.value),
-      timelineApi.list(new URLSearchParams({ bookId: bookId.value, pageSize: '100' }))
+      timelineApi.list(new URLSearchParams({ bookId: bookId.value, pageSize: '100' })),
+      copiesApi.list(bookId.value),
+      locationsApi.list()
     ]);
     book.value = bookResult.book;
     traces.value = loadedTraces;
     reflections.value = reflectionResult.items;
     activities.value = timelineResult.items;
+    copies.value = copiesResult.items;
+    locations.value = locationsResult.items;
   } catch (caught) {
     error.value = caught instanceof ApiError ? caught.message : '书目加载失败';
   } finally {
@@ -244,6 +262,7 @@ async function restoreLastDeleted(): Promise<void> {
     if (item.kind === 'ANNOTATION') await traceApi.restoreAnnotation(item.id);
     if (item.kind === 'REREAD_MARK') await traceApi.restoreReread(item.id);
     if (item.kind === 'REFLECTION') await reflectionApi.restore(item.id);
+    if (item.kind === 'COPY') await copiesApi.restore(item.id);
     lastDeleted.value = null;
     success.value = '删除已撤销';
     await load();
@@ -354,6 +373,153 @@ async function deleteBook(): Promise<void> {
   }
 }
 
+function copyName(copy: BookCopy): string {
+  return copy.label ? `第 ${copy.copyNo} 册（${copy.label}）` : `第 ${copy.copyNo} 册`;
+}
+
+function openCopyCreate(): void {
+  showCopyForm.value = true;
+  copyEdit.value = null;
+  moveTarget.value = null;
+  copyForm.locationId = '';
+  copyForm.label = '';
+  copyForm.note = '';
+  error.value = '';
+}
+
+async function submitCopyCreate(): Promise<void> {
+  if (!book.value) return;
+  saving.value = true;
+  error.value = '';
+  try {
+    await copiesApi.create(book.value.id, {
+      locationId: copyForm.locationId || null,
+      label: copyForm.label.trim() || null,
+      note: copyForm.note.trim() || null
+    });
+    showCopyForm.value = false;
+    success.value = '副本已登记';
+    await load();
+  } catch (caught) {
+    error.value = caught instanceof ApiError ? caught.message : '副本登记失败';
+  } finally {
+    saving.value = false;
+  }
+}
+
+function openCopyEdit(copy: BookCopy): void {
+  copyEdit.value = copy;
+  moveTarget.value = null;
+  showCopyForm.value = false;
+  copyEditForm.label = copy.label ?? '';
+  copyEditForm.note = copy.note ?? '';
+  error.value = '';
+}
+
+async function submitCopyEdit(): Promise<void> {
+  if (!copyEdit.value) return;
+  saving.value = true;
+  error.value = '';
+  try {
+    await copiesApi.update(copyEdit.value.id, {
+      label: copyEditForm.label.trim() || null,
+      note: copyEditForm.note.trim() || null,
+      version: copyEdit.value.version
+    });
+    copyEdit.value = null;
+    success.value = '副本信息已更新';
+    await load();
+  } catch (caught) {
+    error.value = caught instanceof ApiError ? caught.message : '副本更新失败';
+  } finally {
+    saving.value = false;
+  }
+}
+
+function openMove(copy: BookCopy): void {
+  moveTarget.value = copy;
+  copyEdit.value = null;
+  showCopyForm.value = false;
+  moveForm.toLocationId = copy.locationId ?? '';
+  moveForm.reason = '';
+  error.value = '';
+}
+
+async function submitMove(): Promise<void> {
+  if (!moveTarget.value) return;
+  saving.value = true;
+  error.value = '';
+  try {
+    await copiesApi.move(moveTarget.value.id, {
+      toLocationId: moveForm.toLocationId || null,
+      reason: moveForm.reason.trim() || null,
+      version: moveTarget.value.version
+    });
+    moveTarget.value = null;
+    success.value = '副本已移动，迁移历史已记录';
+    await load();
+  } catch (caught) {
+    error.value = caught instanceof ApiError ? caught.message : '副本移动失败';
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function archiveCopy(copy: BookCopy): Promise<void> {
+  if (!window.confirm(`归档${copyName(copy)}？归档表示它已被收纳，不再摆在日常书架上。`)) return;
+  error.value = '';
+  try {
+    await copiesApi.archive(copy.id, copy.version);
+    success.value = '副本已归档';
+    await load();
+  } catch (caught) {
+    error.value = caught instanceof ApiError ? caught.message : '归档失败';
+  }
+}
+
+async function unarchiveCopy(copy: BookCopy): Promise<void> {
+  error.value = '';
+  try {
+    await copiesApi.unarchive(copy.id, copy.version);
+    success.value = '副本已重新在架';
+    await load();
+  } catch (caught) {
+    error.value = caught instanceof ApiError ? caught.message : '取消归档失败';
+  }
+}
+
+async function deleteCopy(copy: BookCopy): Promise<void> {
+  if (!window.confirm(`确定删除${copyName(copy)}吗？同书的其他副本不受影响，24 小时内可以撤销。`)) return;
+  error.value = '';
+  try {
+    await copiesApi.delete(copy.id, copy.version);
+    lastDeleted.value = { kind: 'COPY', id: copy.id, label: copyName(copy) };
+    success.value = '副本已删除，可在 24 小时内撤销';
+    await load();
+  } catch (caught) {
+    error.value = caught instanceof ApiError ? caught.message : '副本删除失败';
+  }
+}
+
+async function toggleMovements(copy: BookCopy): Promise<void> {
+  if (expandedMovements.value === copy.id) {
+    expandedMovements.value = null;
+    return;
+  }
+  expandedMovements.value = copy.id;
+  error.value = '';
+  try {
+    const result = await copiesApi.movements(copy.id);
+    movementsByCopy.value = { ...movementsByCopy.value, [copy.id]: result.items };
+  } catch (caught) {
+    error.value = caught instanceof ApiError ? caught.message : '迁移历史加载失败';
+  }
+}
+
+function movementText(movement: CopyMovement): string {
+  return `${movement.fromLocationName ?? '未上架'} → ${movement.toLocationName ?? '未上架'}`;
+}
+
 function eventSummary(payload: Record<string, unknown>): string {
   if (typeof payload.pageNumber === 'number') return `第 ${payload.pageNumber} 页`;
   if (typeof payload.startPage === 'number') {
@@ -361,6 +527,16 @@ function eventSummary(payload: Record<string, unknown>): string {
     return `第 ${payload.startPage}–${end} 页`;
   }
   if (Array.isArray(payload.moodTags)) return payload.moodTags.map((tag) => MOOD_LABELS[tag as MoodTag] ?? tag).join('、');
+  if (typeof payload.copyNo === 'number') {
+    const base = `第 ${payload.copyNo} 册`;
+    if ('fromLocationName' in payload || 'toLocationName' in payload) {
+      const from = typeof payload.fromLocationName === 'string' ? payload.fromLocationName : '未上架';
+      const to = typeof payload.toLocationName === 'string' ? payload.toLocationName : '未上架';
+      return `${base}：${from} → ${to}`;
+    }
+    if (typeof payload.locationName === 'string') return `${base}：${payload.locationName}`;
+    return base;
+  }
   if (payload.cascade) return '随书目删除';
   return '';
 }
@@ -434,6 +610,102 @@ onMounted(load);
       </label>
       <button class="button button-primary" type="submit" :disabled="saving">保存完成感受</button>
     </form>
+
+    <section class="card trace-workspace">
+      <div class="section-heading">
+        <div>
+          <h2>实体副本</h2>
+          <p class="muted">同一本书可以登记多册；每次移动和归档都会记入时间线。</p>
+        </div>
+        <div class="button-row">
+          <RouterLink class="button button-quiet" to="/shelves">管理书架位置</RouterLink>
+          <button class="button" type="button" @click="openCopyCreate">登记一册副本</button>
+        </div>
+      </div>
+
+      <form v-if="showCopyForm" class="inline-editor" @submit.prevent="submitCopyCreate">
+        <h3>登记副本</h3>
+        <label>
+          存放位置
+          <select v-model="copyForm.locationId">
+            <option value="">暂不放置</option>
+            <option v-for="location in locations" :key="location.id" :value="location.id">{{ location.name }}</option>
+          </select>
+        </label>
+        <label>册标记（可选）<input v-model="copyForm.label" type="text" maxlength="100" placeholder="例如：签名本、影印版" /></label>
+        <label>备注（可选）<textarea v-model="copyForm.note" rows="2" maxlength="500" /></label>
+        <div class="form-actions">
+          <button class="button button-quiet" type="button" @click="showCopyForm = false">取消</button>
+          <button class="button button-primary" type="submit" :disabled="saving">保存副本</button>
+        </div>
+      </form>
+
+      <p v-if="copies.length === 0" class="empty-inline">还没有为这本书登记实体副本。</p>
+      <div v-else class="trace-list copies-list">
+        <article v-for="copy in copies" :key="copy.id" class="trace-card">
+          <div class="trace-card-heading">
+            <div>
+              <span class="trace-type">{{ copyName(copy) }}</span>
+              <span class="status-badge" :data-status="copy.status">{{ COPY_STATUS_LABELS[copy.status] }}</span>
+            </div>
+            <div class="button-row">
+              <button class="text-button" type="button" @click="openMove(copy)">移动</button>
+              <button v-if="copy.status === 'ON_SHELF'" class="text-button" type="button" @click="archiveCopy(copy)">归档</button>
+              <button v-else class="text-button" type="button" @click="unarchiveCopy(copy)">取消归档</button>
+              <button class="text-button" type="button" @click="openCopyEdit(copy)">编辑</button>
+              <button class="text-button" type="button" @click="toggleMovements(copy)">
+                {{ expandedMovements === copy.id ? '收起历史' : '迁移历史' }}
+              </button>
+              <button class="text-button danger-text" type="button" @click="deleteCopy(copy)">删除</button>
+            </div>
+          </div>
+          <p class="muted">
+            当前位置：{{ copy.locationName ?? '未上架' }}
+            <template v-if="copy.status === 'ARCHIVED' && copy.archivedAt">
+              · 归档于 {{ formatDateTime(copy.archivedAt) }}
+            </template>
+          </p>
+          <p v-if="copy.note" class="preserve-text">{{ copy.note }}</p>
+
+          <form v-if="copyEdit?.id === copy.id" class="inline-editor" @submit.prevent="submitCopyEdit">
+            <h3>编辑{{ copyName(copy) }}</h3>
+            <label>册标记（可选）<input v-model="copyEditForm.label" type="text" maxlength="100" /></label>
+            <label>备注（可选）<textarea v-model="copyEditForm.note" rows="2" maxlength="500" /></label>
+            <div class="form-actions">
+              <button class="button button-quiet" type="button" @click="copyEdit = null">取消</button>
+              <button class="button button-primary" type="submit" :disabled="saving">保存修改</button>
+            </div>
+          </form>
+
+          <form v-if="moveTarget?.id === copy.id" class="inline-editor" @submit.prevent="submitMove">
+            <h3>移动{{ copyName(copy) }}</h3>
+            <label>
+              移动到
+              <select v-model="moveForm.toLocationId">
+                <option value="">未上架（不属于任何位置）</option>
+                <option v-for="location in locations" :key="location.id" :value="location.id">{{ location.name }}</option>
+              </select>
+            </label>
+            <label>移动原因（可选）<input v-model="moveForm.reason" type="text" maxlength="500" /></label>
+            <div class="form-actions">
+              <button class="button button-quiet" type="button" @click="moveTarget = null">取消</button>
+              <button class="button button-primary" type="submit" :disabled="saving">确认移动</button>
+            </div>
+          </form>
+
+          <div v-if="expandedMovements === copy.id" class="movement-list">
+            <p v-if="(movementsByCopy[copy.id] ?? []).length === 0" class="empty-inline">这册还没有移动记录。</p>
+            <ul v-else>
+              <li v-for="movement in movementsByCopy[copy.id]" :key="movement.id">
+                <strong>{{ movementText(movement) }}</strong>
+                <span v-if="movement.reason" class="muted">（{{ movement.reason }}）</span>
+                <time :datetime="movement.movedAt">{{ formatDateTime(movement.movedAt) }}</time>
+              </li>
+            </ul>
+          </div>
+        </article>
+      </div>
+    </section>
 
     <section class="card trace-workspace">
       <div class="section-heading">
@@ -557,3 +829,28 @@ onMounted(load);
     <RouterLink class="button button-primary" to="/">返回我的书</RouterLink>
   </section>
 </template>
+
+<style scoped>
+.copies-list {
+  margin-top: 1rem;
+}
+
+.movement-list ul {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0.8rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.movement-list li {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.movement-list time {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+</style>

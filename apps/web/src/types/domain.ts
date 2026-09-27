@@ -1,6 +1,6 @@
-import type { ActivityAction, ActivityEntityType, BookStatus, MoodTag, TraceType } from '@paper-book-traces/shared';
+import type { ActivityAction, ActivityEntityType, BookStatus, CopyStatus, MoodTag, TraceType } from '@paper-book-traces/shared';
 
-export type { ActivityAction, ActivityEntityType, BookStatus, MoodTag, TraceType };
+export type { ActivityAction, ActivityEntityType, BookStatus, CopyStatus, MoodTag, TraceType };
 
 export interface User {
   id: string;
@@ -28,9 +28,56 @@ export interface Book {
   createdAt: string;
   updatedAt: string;
   traceSummary: TraceSummary;
+  copyCount?: number;
   hasCompletionReflection?: boolean;
   lastTraceAt?: string | null;
   reflections?: Reflection[];
+}
+
+export interface ShelfLocation {
+  id: string;
+  name: string;
+  note: string | null;
+  sortOrder: number;
+  version: number;
+  copyCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BookCopy {
+  id: string;
+  bookId: string;
+  copyNo: number;
+  label: string | null;
+  note: string | null;
+  status: CopyStatus;
+  locationId: string | null;
+  locationName: string | null;
+  archivedAt: string | null;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ShelfCopy {
+  id: string;
+  bookId: string;
+  bookTitle: string;
+  copyNo: number;
+  label: string | null;
+  status: CopyStatus;
+}
+
+export interface CopyMovement {
+  id: string;
+  copyId: string;
+  fromLocationId: string | null;
+  fromLocationName: string | null;
+  toLocationId: string | null;
+  toLocationName: string | null;
+  reason: string | null;
+  movedAt: string;
 }
 
 export interface DogEar {
@@ -85,7 +132,7 @@ export interface Reflection {
 export interface TimelineEvent {
   id: string;
   bookId: string | null;
-  bookTitle: string;
+  bookTitle: string | null;
   entityType: ActivityEntityType;
   entityId: string | null;
   action: ActivityAction;
@@ -125,13 +172,21 @@ export const TRACE_LABELS: Record<TraceType, string> = {
   REREAD_MARK: '重读页'
 };
 
+export const COPY_STATUS_LABELS: Record<CopyStatus, string> = {
+  ON_SHELF: '在架',
+  ARCHIVED: '已归档'
+};
+
 export const ACTION_LABELS: Record<ActivityAction, string> = {
   CREATED: '创建',
   UPDATED: '修改',
   DELETED: '删除',
   RESTORED: '恢复',
   STATUS_CHANGED: '状态变化',
-  COMPLETED: '读完'
+  COMPLETED: '读完',
+  MOVED: '移动',
+  ARCHIVED: '归档',
+  UNARCHIVED: '取消归档'
 };
 
 export const ENTITY_LABELS: Record<ActivityEntityType, string> = {
@@ -139,5 +194,7 @@ export const ENTITY_LABELS: Record<ActivityEntityType, string> = {
   DOG_EAR: '折角',
   ANNOTATION: '批注',
   REREAD_MARK: '重读页',
-  COMPLETION_REFLECTION: '完成感受'
+  COMPLETION_REFLECTION: '完成感受',
+  SHELF_LOCATION: '书架位置',
+  BOOK_COPY: '实体副本'
 };
