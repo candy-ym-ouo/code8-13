@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isRestoreWindowOpen, isStrictlyEditable, normalizeMoodTags, validatePageRange, validateStatusTransition } from './domain.js';
+import { assertCopyStatus, isRestoreWindowOpen, isStrictlyEditable, nextCopyNumber, normalizeMoodTags, validatePageRange, validateStatusTransition } from './domain.js';
 import { AppError } from './errors.js';
 
 describe('domain rules', () => {
@@ -30,5 +30,20 @@ describe('domain rules', () => {
     expect(isRestoreWindowOpen(new Date('2026-09-22T00:00:00.000Z'), now)).toBe(false);
     expect(isStrictlyEditable(new Date('2026-09-25T00:00:00.000Z'), now)).toBe(true);
     expect(isStrictlyEditable(new Date('2026-09-23T00:00:00.000Z'), now)).toBe(false);
+  });
+
+  it('numbers copies from the maximum existing number including soft-deleted ones', () => {
+    expect(nextCopyNumber([])).toBe(1);
+    expect(nextCopyNumber([1, 2, 3])).toBe(4);
+    expect(nextCopyNumber([1, 3])).toBe(4);
+    // Deleting copy #2 and registering a new one must never reuse #2, so a
+    // later restore cannot clash.
+    expect(nextCopyNumber([1, 2, 3, 4])).toBe(5);
+  });
+
+  it('accepts only declared copy statuses', () => {
+    expect(() => assertCopyStatus('SHELVED')).not.toThrow();
+    expect(() => assertCopyStatus('ARCHIVED')).not.toThrow();
+    expect(() => assertCopyStatus('LOST')).toThrow(AppError);
   });
 });

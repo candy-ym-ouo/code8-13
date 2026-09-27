@@ -1,4 +1,4 @@
-import { BOOK_STATUSES, MOOD_TAGS, type BookStatus, type MoodTag } from '@paper-book-traces/shared';
+import { BOOK_STATUSES, COPY_STATUSES, MOOD_TAGS, type BookCopyStatus, type BookStatus, type MoodTag } from '@paper-book-traces/shared';
 import { AppError } from './errors.js';
 
 export const STATUS_TRANSITIONS: Record<BookStatus, BookStatus[]> = {
@@ -85,4 +85,16 @@ export function isRestoreWindowOpen(deletedAt: Date | null, now = new Date()): b
 
 export function isStrictlyEditable(editableUntil: Date, now = new Date()): boolean {
   return now.getTime() <= editableUntil.getTime();
+}
+
+export function nextCopyNumber(existingNumbers: number[]): number {
+  // Include soft-deleted numbers so restoring a deleted copy never collides
+  // with a later registration.
+  return existingNumbers.reduce((max, value) => Math.max(max, value), 0) + 1;
+}
+
+export function assertCopyStatus(value: string): asserts value is BookCopyStatus {
+  if (!COPY_STATUSES.includes(value as BookCopyStatus)) {
+    throw new AppError(422, 'VALIDATION_ERROR', '副本状态无效', { status: '副本状态无效' });
+  }
 }

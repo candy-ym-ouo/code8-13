@@ -190,7 +190,8 @@ export const bookRoutes: FastifyPluginAsync = async (app) => {
               dogEars: { where: { deletedAt: null } },
               annotations: { where: { deletedAt: null } },
               rereadMarks: { where: { deletedAt: null } },
-              reflections: { where: { deletedAt: null } }
+              reflections: { where: { deletedAt: null } },
+              copies: { where: { deletedAt: null } }
             }
           }
         }
@@ -220,6 +221,7 @@ export const bookRoutes: FastifyPluginAsync = async (app) => {
           annotations: book._count.annotations,
           rereadMarks: book._count.rereadMarks
         },
+        copyCount: book._count.copies,
         hasCompletionReflection: book._count.reflections > 0,
         lastTraceAt: latestMap.get(book.id) ?? null
       })),
@@ -272,8 +274,14 @@ export const bookRoutes: FastifyPluginAsync = async (app) => {
             dogEars: { where: { deletedAt: null } },
             annotations: { where: { deletedAt: null } },
             rereadMarks: { where: { deletedAt: null } },
-            reflections: { where: { deletedAt: null } }
+            reflections: { where: { deletedAt: null } },
+            copies: { where: { deletedAt: null } }
           }
+        },
+        copies: {
+          where: { deletedAt: null },
+          orderBy: { copyNumber: 'asc' },
+          include: { currentLocation: true }
         },
         reflections: {
           where: { deletedAt: null },
@@ -291,6 +299,22 @@ export const bookRoutes: FastifyPluginAsync = async (app) => {
           annotations: book._count.annotations,
           rereadMarks: book._count.rereadMarks
         },
+        copyCount: book._count.copies,
+        copies: book.copies.map((copy) => ({
+          id: copy.id,
+          copyNumber: copy.copyNumber,
+          label: copy.label,
+          condition: copy.condition,
+          acquiredAt: copy.acquiredAt,
+          notes: copy.notes,
+          status: copy.status,
+          version: copy.version,
+          createdAt: copy.createdAt,
+          updatedAt: copy.updatedAt,
+          location: copy.currentLocation
+            ? { id: copy.currentLocation.id, name: copy.currentLocation.name, status: copy.currentLocation.status }
+            : null
+        })),
         reflections: book.reflections.map(serializeReflection)
       }
     };
@@ -459,18 +483,40 @@ export const bookRoutes: FastifyPluginAsync = async (app) => {
         throw new AppError(409, 'STALE_WRITE', '书目已在其他位置被修改，请刷新后重试');
       }
       const now = new Date();
-      const [dogEars, annotations, rereadMarks, reflections] = await Promise.all([
+      const [dogEars, annotations, rereadMarks, reflections, copies] = await Promise.all([
         tx.dogEar.findMany({ where: { bookId, deletedAt: null }, select: { id: true } }),
         tx.annotation.findMany({ where: { bookId, deletedAt: null }, select: { id: true } }),
         tx.rereadMark.findMany({ where: { bookId, deletedAt: null }, select: { id: true } }),
-        tx.completionReflection.findMany({ where: { bookId, deletedAt: null }, select: { id: true } })
+        tx.completionReflection.findMany({ where: { bookId, deletedAt: null }, select: { id: true } }),
+        tx.bookCopy.findMany({
+          where: { bookId, deletedAt: null },
+          include: { currentLocation: { select: { id: true, name: true } } }
+        })
       ]);
       await Promise.all([
         tx.dogEar.updateMany({ where: { bookId, deletedAt: null }, data: { deletedAt: now, version: { increment: 1 } } }),
         tx.annotation.updateMany({ where: { bookId, deletedAt: null }, data: { deletedAt: now, version: { increment: 1 } } }),
         tx.rereadMark.updateMany({ where: { bookId, deletedAt: null }, data: { deletedAt: now, version: { increment: 1 } } }),
-        tx.completionReflection.updateMany({ where: { bookId, deletedAt: null }, data: { deletedAt: now, version: { increment: 1 } } })
+        tx.completionReflection.updateMany({ where: { bookId, deletedAt: null }, data: { deletedAt: now, version: { increment: 1 } } }),
+        tx.bookCopy.updateMany({ where: { bookId, deletedAt: null }, data: { deletedAt: now, currentLocationId: null, status: 'ARCHIVED', version: { increment: 1 } } }),
       ]);
+      // Only copies of THIS book are affected; copies of other books keep both
+      // their rows and their shelf assignments.
+      for (const copy of copies) {
+        await tx.copyLocationEvent.create({
+          data: {
+            userId,
+            copyId: copy.id,
+            bookId,
+            action: 'REMOVED',
+            fromLocationId: copy.currentLocation ? copy.currentLocation.id : null,
+            toLocationId: null,
+            fromSnapshot: copy.currentLocation ? copy.currentLocation.name : null,
+            toSnapshot: null,
+            note: '删除书目时级联移出'
+          }
+        });
+      }
       await tx.book.update({
         where: { id: bookId },
         data: { deletedAt: now, version: { increment: 1 } }
@@ -481,13 +527,14 @@ export const bookRoutes: FastifyPluginAsync = async (app) => {
         entityType: 'BOOK',
         entityId: bookId,
         action: 'DELETED',
-        payload: { bookTitle: book.title }
+        payload: { bookTitle: book.title, copyCount: copies.length }
       });
       const childEvents = [
         ...dogEars.map((item) => ({ entityType: 'DOG_EAR' as const, id: item.id })),
         ...annotations.map((item) => ({ entityType: 'ANNOTATION' as const, id: item.id })),
         ...rereadMarks.map((item) => ({ entityType: 'REREAD_MARK' as const, id: item.id })),
-        ...reflections.map((item) => ({ entityType: 'COMPLETION_REFLECTION' as const, id: item.id }))
+        ...reflections.map((item) => ({ entityType: 'COMPLETION_REFLECTION' as const, id: item.id })),
+        ...copies.map((item) => ({ entityType: 'BOOK_COPY' as const, id: item.id }))
       ];
       for (const child of childEvents) {
         await writeEvent(tx, {

@@ -12,6 +12,8 @@ import { traceRoutes } from './modules/traces/routes.js';
 import { reflectionRoutes } from './modules/reflections/routes.js';
 import { timelineRoutes } from './modules/timeline/routes.js';
 import { exportRoutes } from './modules/exports/routes.js';
+import { locationRoutes } from './modules/locations/routes.js';
+import { copyRoutes } from './modules/copies/routes.js';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -75,6 +77,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(reflectionRoutes, { prefix: '/api/v1' });
   await app.register(timelineRoutes, { prefix: '/api/v1' });
   await app.register(exportRoutes, { prefix: '/api/v1' });
+  await app.register(locationRoutes, { prefix: '/api/v1' });
+  await app.register(copyRoutes, { prefix: '/api/v1' });
 
   app.setNotFoundHandler((request, reply) =>
     sendError(reply, 404, 'NOT_FOUND', '接口不存在', undefined, request.id)

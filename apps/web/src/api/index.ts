@@ -2,12 +2,15 @@ import { api } from './client';
 import type {
   Annotation,
   Book,
+  BookCopy,
   BookStatus,
+  CopyLocationEvent,
   DogEar,
   MoodTag,
   Pagination,
   Reflection,
   RereadMark,
+  ShelfLocation,
   TimelineEvent,
   Trace,
   User
@@ -88,4 +91,48 @@ export const timelineApi = {
 export const exportApi = {
   download: (includeDeleted: boolean) =>
     api.download(`/exports/me?includeDeleted=${includeDeleted ? 'true' : 'false'}`)
+};
+
+export const locationApi = {
+  list: (params: URLSearchParams) =>
+    api.get<{ items: ShelfLocation[]; pagination: Pagination }>(`/locations?${params}`),
+  create: (body: { name: string; description: string | null }) =>
+    api.post<{ location: ShelfLocation }>('/locations', body),
+  update: (id: string, body: { name?: string; description?: string | null }) =>
+    api.patch<{ location: ShelfLocation }>(`/locations/${id}`, body),
+  archive: (id: string) => api.post<{ location: ShelfLocation }>(`/locations/${id}/archive`),
+  unarchive: (id: string) => api.post<{ location: ShelfLocation }>(`/locations/${id}/unarchive`),
+  delete: (id: string) => api.delete<void>(`/locations/${id}`)
+};
+
+export interface CopyPayload {
+  label?: string | null;
+  condition?: string | null;
+  acquiredAt?: string | null;
+  notes?: string | null;
+  locationId?: string | null;
+  note?: string | null;
+}
+
+export const copyApi = {
+  listForBook: (bookId: string) =>
+    api.get<{ items: BookCopy[]; pagination: Pagination }>(
+      `/books/${bookId}/copies?page=1&pageSize=100`
+    ),
+  create: (bookId: string, body: CopyPayload) =>
+    api.post<{ copy: BookCopy }>(`/books/${bookId}/copies`, body),
+  get: (id: string) => api.get<{ copy: BookCopy }>(`/copies/${id}`),
+  history: (id: string) => api.get<{ items: CopyLocationEvent[] }>(`/copies/${id}/history`),
+  update: (id: string, body: CopyPayload & { version: number }) =>
+    api.patch<{ copy: BookCopy }>(`/copies/${id}`, body),
+  move: (id: string, body: { locationId: string | null; note?: string | null; version?: number }) =>
+    api.post<{ copy: BookCopy; unchanged?: boolean }>(`/copies/${id}/move`, body),
+  archive: (id: string, body: { note?: string | null; version?: number }) =>
+    api.post<{ copy: BookCopy }>(`/copies/${id}/archive`, body),
+  unarchive: (
+    id: string,
+    body: { locationId?: string | null; note?: string | null; version?: number }
+  ) => api.post<{ copy: BookCopy }>(`/copies/${id}/unarchive`, body),
+  delete: (id: string, version: number) => api.delete<void>(`/copies/${id}`, { version }),
+  restore: (id: string) => api.post<{ copy: BookCopy }>(`/copies/${id}/restore`)
 };

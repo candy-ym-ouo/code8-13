@@ -79,6 +79,12 @@ function summary(event: TimelineEvent): string {
     return `${payload.previousStatus} → ${payload.nextStatus}`;
   }
   if (typeof payload.summary === 'string') return payload.summary;
+  if (typeof payload.fromLocationName === 'string' || payload.removed === true) {
+    const from = payload.fromLocationName ?? '（未上架）';
+    const to = typeof payload.toLocationName === 'string' ? payload.toLocationName : '（移出书架）';
+    return payload.removed ? `${from} → ${to}` : `${from} → ${to}`;
+  }
+  if (typeof payload.locationName === 'string') return payload.locationName;
   return '';
 }
 

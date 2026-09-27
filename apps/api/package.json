@@ -9,6 +9,7 @@
     "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "verify:migrations": "tsx scripts/verify-migrations.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
@@ -21,11 +22,12 @@
     "@node-rs/argon2": "^2.0.2",
     "@paper-book-traces/shared": "1.0.0",
     "@prisma/client": "6.12.0",
+    "dotenv": "^17.2.2",
     "fastify": "^5.6.0",
-    "zod": "^4.1.5",
-    "dotenv": "^17.2.2"
+    "zod": "^4.1.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/node": "^24.3.0",
     "prisma": "6.12.0",
     "tsx": "^4.20.5",

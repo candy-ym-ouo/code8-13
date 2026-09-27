@@ -115,6 +115,9 @@ onMounted(load);
         <p v-if="book.hasCompletionReflection" class="completion-hint">
           已留下读完后的感受
         </p>
+        <p v-if="book.copyCount" class="completion-hint">
+          实体副本 {{ book.copyCount }} 册
+        </p>
         <RouterLink class="button button-block" :to="`/books/${book.id}`">查看这本书</RouterLink>
       </article>
     </div>

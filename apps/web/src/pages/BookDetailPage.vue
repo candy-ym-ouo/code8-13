@@ -6,6 +6,7 @@ import { booksApi, reflectionApi, traceApi } from '../api';
 import { formatDate, formatDateTime } from '../api/format';
 import ErrorNotice from '../components/ErrorNotice.vue';
 import MoodPicker from '../components/MoodPicker.vue';
+import BookCopiesPanel from '../components/BookCopiesPanel.vue';
 import {
   ACTION_LABELS,
   ENTITY_LABELS,
@@ -36,7 +37,7 @@ const loading = ref(true);
 const saving = ref(false);
 const error = ref('');
 const success = ref('');
-const activeTab = ref<'PAGES' | TraceType | 'REFLECTIONS' | 'TIMELINE'>('PAGES');
+const activeTab = ref<'PAGES' | TraceType | 'REFLECTIONS' | 'TIMELINE' | 'COPIES'>('PAGES');
 const createType = ref<TraceType | null>(null);
 const editing = ref<Trace | null>(null);
 const showCompleteForm = ref(false);
@@ -59,6 +60,7 @@ const tabs = computed(() => [
   { value: 'DOG_EAR' as const, label: `折角 ${book.value?.traceSummary.dogEars ?? 0}` },
   { value: 'ANNOTATION' as const, label: `批注 ${book.value?.traceSummary.annotations ?? 0}` },
   { value: 'REREAD_MARK' as const, label: `重读 ${book.value?.traceSummary.rereadMarks ?? 0}` },
+  { value: 'COPIES' as const, label: `实体副本 ${book.value?.copies?.length ?? 0}` },
   { value: 'REFLECTIONS' as const, label: `读完感受 ${reflections.value.length}` },
   { value: 'TIMELINE' as const, label: '本书时间线' }
 ]);
@@ -354,6 +356,20 @@ async function deleteBook(): Promise<void> {
   }
 }
 
+async function syncCopies(): Promise<void> {
+  if (!book.value) return;
+  try {
+    const result = await booksApi.get(book.value.id);
+    book.value = {
+      ...book.value,
+      ...(result.book.copies ? { copies: result.book.copies } : {}),
+      ...(result.book.copyCount !== undefined ? { copyCount: result.book.copyCount } : {})
+    };
+  } catch {
+    // The panel already surfaced its own error; refresh will reconcile on next load.
+  }
+}
+
 function eventSummary(payload: Record<string, unknown>): string {
   if (typeof payload.pageNumber === 'number') return `第 ${payload.pageNumber} 页`;
   if (typeof payload.startPage === 'number') {
@@ -362,6 +378,13 @@ function eventSummary(payload: Record<string, unknown>): string {
   }
   if (Array.isArray(payload.moodTags)) return payload.moodTags.map((tag) => MOOD_LABELS[tag as MoodTag] ?? tag).join('、');
   if (payload.cascade) return '随书目删除';
+  if (typeof payload.copyNumber === 'number') {
+    const from = typeof payload.fromLocationName === 'string' ? payload.fromLocationName : '未上架';
+    if (typeof payload.toLocationName === 'string') return `第 ${payload.copyNumber} 册：${from} → ${payload.toLocationName}`;
+    if (payload.removed === true) return `第 ${payload.copyNumber} 册：${from} → 移出书架`;
+    return `第 ${payload.copyNumber} 册`;
+  }
+  if (typeof payload.locationName === 'string') return payload.locationName;
   return '';
 }
 
@@ -491,7 +514,15 @@ onMounted(load);
         </button>
       </div>
 
-      <div v-if="activeTab === 'REFLECTIONS'" class="trace-list">
+      <div v-if="activeTab === 'COPIES'">
+        <BookCopiesPanel
+          :book-id="bookView.id"
+          :initial-copies="bookView.copies ?? []"
+          @changed="syncCopies"
+        />
+      </div>
+
+      <div v-else-if="activeTab === 'REFLECTIONS'" class="trace-list">
         <article v-for="reflection in reflections" :key="reflection.id" class="trace-card">
           <div class="trace-card-heading">
             <div>

@@ -931,3 +931,106 @@ small,
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Shelf locations and physical copies */
+.locations-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+  gap: 1.2rem;
+  align-items: start;
+}
+
+.location-list,
+.copy-list,
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.8rem;
+}
+
+.location-item,
+.copy-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  background: #fffdf8;
+}
+
+.location-heading,
+.copy-heading,
+.history-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.copy-line {
+  margin: 0.15rem 0;
+}
+
+.copy-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.copies-panel .section-heading {
+  align-items: flex-start;
+}
+
+.history-list {
+  gap: 0.7rem;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.history-item {
+  border-left: 3px solid var(--line);
+  padding-left: 0.8rem;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(45, 38, 30, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.2rem;
+  z-index: 30;
+}
+
+.modal-card {
+  width: min(480px, 100%);
+  max-height: 85vh;
+  overflow-y: auto;
+  display: grid;
+  gap: 0.9rem;
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .locations-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .location-item,
+  .copy-card {
+    flex-direction: column;
+  }
+
+  .copy-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+}

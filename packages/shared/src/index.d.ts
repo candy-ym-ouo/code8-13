@@ -1,10 +1,16 @@
 export type BookStatus = 'TO_READ' | 'READING' | 'READ' | 'PAUSED' | 'ABANDONED';
 export type MoodTag = 'MOVED' | 'CALM' | 'JOYFUL' | 'SAD' | 'ANGRY' | 'CONFUSED' | 'RELIEVED' | 'EMPTY' | 'CHANGED';
 export type TraceType = 'DOG_EAR' | 'ANNOTATION' | 'REREAD_MARK';
-export type ActivityAction = 'CREATED' | 'UPDATED' | 'DELETED' | 'RESTORED' | 'STATUS_CHANGED' | 'COMPLETED';
-export type ActivityEntityType = 'BOOK' | 'DOG_EAR' | 'ANNOTATION' | 'REREAD_MARK' | 'COMPLETION_REFLECTION';
+export type ActivityAction = 'CREATED' | 'UPDATED' | 'DELETED' | 'RESTORED' | 'STATUS_CHANGED' | 'COMPLETED' | 'MOVED' | 'ARCHIVED' | 'UNARCHIVED';
+export type ActivityEntityType = 'BOOK' | 'DOG_EAR' | 'ANNOTATION' | 'REREAD_MARK' | 'COMPLETION_REFLECTION' | 'SHELF_LOCATION' | 'BOOK_COPY';
+export type ShelfLocationStatus = 'ACTIVE' | 'ARCHIVED';
+export type BookCopyStatus = 'SHELVED' | 'ARCHIVED';
+export type CopyMoveAction = 'PLACED' | 'MOVED' | 'REMOVED' | 'ARCHIVED' | 'UNARCHIVED';
 export declare const BOOK_STATUSES: BookStatus[];
 export declare const MOOD_TAGS: MoodTag[];
 export declare const TRACE_TYPES: TraceType[];
 export declare const ACTIVITY_ACTIONS: ActivityAction[];
 export declare const ACTIVITY_ENTITY_TYPES: ActivityEntityType[];
+export declare const LOCATION_STATUSES: ShelfLocationStatus[];
+export declare const COPY_STATUSES: BookCopyStatus[];
+export declare const COPY_MOVE_ACTIONS: CopyMoveAction[];
